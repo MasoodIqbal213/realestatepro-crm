@@ -10,9 +10,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { User } from '@/models/User';
-import { requireAuth, requireAnyRole, createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { requireAuth, requireAnyRole, createErrorResponse, createSuccessResponse, withRole, getUserFromRequest, ROLES } from '@/lib/middleware';
 import { userActionLogger, errorLogger } from '@/lib/logging';
 import { belongsToRealEstate } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
 
 // Define user creation request structure
 interface CreateUserRequest {
@@ -43,6 +44,8 @@ interface UpdateUserRequest {
  * Super admins see all users, admins see users in their real estate.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+  
   try {
     // Connect to database
     await dbConnect();
@@ -94,6 +97,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const total = await User.countDocuments(query);
 
+    // Calculate pagination info
+    const pages = Math.ceil(total / limit);
+
     // Log the action
     userActionLogger.info({
       user: user.email,
@@ -101,6 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       filters: { role, isActive, search },
       count: users.length,
       total,
+      responseTime: Date.now() - startTime,
       timestamp: new Date(),
     });
 
@@ -110,15 +117,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit),
+        pages,
       },
     }, user);
 
   } catch (error) {
+    const responseTime = Date.now() - startTime;
+    
     errorLogger.error({
       action: 'users_list_error',
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
+      responseTime,
       timestamp: new Date(),
     });
 
@@ -132,6 +141,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * Only super admins and admins can create users.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+  
   try {
     // Connect to database
     await dbConnect();
@@ -205,6 +216,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       targetUser: newUser.email,
       targetRole: newUser.role,
       realEstateId: newUser.realEstateId?.toString(),
+      responseTime: Date.now() - startTime,
       timestamp: new Date(),
     });
 
@@ -225,13 +237,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return createSuccessResponse(userResponse, user);
 
   } catch (error) {
+    const responseTime = Date.now() - startTime;
+    
     errorLogger.error({
       action: 'user_creation_error',
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
+      responseTime,
       timestamp: new Date(),
     });
 
     return createErrorResponse('Failed to create user', 500);
   }
-} 
+}
+
+// Export handlers with middleware
+export const GETHandler = withRole(ROLES.ADMIN, GET);
+export const POSTHandler = withRole(ROLES.ADMIN, POST); 

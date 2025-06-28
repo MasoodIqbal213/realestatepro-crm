@@ -1,123 +1,124 @@
 # RealEstatePro CRM
 
-Next-generation multi-tenant real estate management platform designed to streamline every aspect of real-estate operations for building owners, their staff, and tenants.
+**Next-generation multi-tenant real estate management platform**
 
-## 🚀 Features
+[![Next.js](https://img.shields.io/badge/Next.js-14.0.4-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-blue)](https://www.typescriptlang.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-6.3.0-green)](https://www.mongodb.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-- **Multi-Tenancy**: Strict data isolation with per-tenant theming
-- **Role-Based Access**: Super Admin, Building Admin, Receptionist, Sales, Maintenance, Tenant
-- **Localization**: English + Arabic (RTL) support with UAE compliance
-- **Real-time Notifications**: Email, SMS, and in-app notifications
-- **Maintenance Management**: Complete workflow from request to resolution
-- **Lead Management**: Visitor registration to tenant conversion
-- **Payment Integration**: Stripe payment gateway integration
-- **Document Management**: Contract and receipt storage
-- **Analytics Dashboard**: Comprehensive reporting and insights
+## 🎉 Sprint 1 Complete!
 
-## 🛠 Tech Stack
+**Status**: ✅ **COMPLETED** - Authentication, RBAC, User Management, and Database Seeding
 
-### Frontend
-- **Next.js 14** (App Router) with TypeScript
-- **Tailwind CSS** + shadcn/ui component library
-- **React Hook Form** + Zod validation
-- **SWR/React Query** for data fetching
-- **i18next** for internationalization
-- **Framer Motion** for animations
+### ✅ Sprint 1 Deliverables
+- **Authentication System**: JWT-based login with secure password validation
+- **Role-Based Access Control**: Complete RBAC with role hierarchy and middleware
+- **User Management**: Full CRUD operations with filtering and pagination
+- **Database Seeding**: Comprehensive initial data with sample users and companies
+- **API Documentation**: Interactive Swagger UI documentation
+- **Logging System**: Structured logging for all user actions and system events
+- **UAT Guide**: Comprehensive testing procedures and test cases
 
-### Backend
-- **Next.js API Routes** with TypeScript
-- **MongoDB** with Mongoose ODM
-- **NextAuth.js** for authentication
-- **JWT/OAuth2** with refresh tokens
-- **Winston** for logging
+### 🚀 Quick Start (Sprint 1)
 
-### Infrastructure
-- **Vercel/AWS** for hosting
-- **MongoDB Atlas** for database
-- **Redis** for caching and sessions
-- **Docker** for containerization
-- **GitHub Actions** for CI/CD
+1. **Clone and Setup**
+   ```bash
+   git clone <repository-url>
+   cd CREM
+   npm install
+   ```
 
-## 📋 Prerequisites
+2. **Configure Environment**
+   ```bash
+   cp env.local.example .env.local
+   # Edit .env.local with your MongoDB Atlas connection string
+   ```
+
+3. **Seed Database**
+   ```bash
+   npm run db:seed
+   ```
+
+4. **Start Development Server**
+   ```bash
+   npm run dev
+   ```
+
+5. **Test the System**
+   - Visit: `http://localhost:3000/api/docs` for API documentation
+   - Login with: `superadmin@realestatepro.com` / `SuperAdmin123!`
+   - Run UAT tests: See `docs/sprint1-uat-guide.md`
+
+## 📋 Project Overview
+
+RealEstatePro CRM is a comprehensive, enterprise-grade real estate management platform designed for multi-tenant operations. The system supports Super Admins who onboard and manage real estate companies, each with their own admins, buildings, flats, and users across different roles.
+
+### 🏗️ Architecture
+
+- **Frontend**: Next.js 14 with App Router, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes with MongoDB/Mongoose
+- **Database**: MongoDB Atlas (cloud-hosted)
+- **Authentication**: JWT with refresh tokens
+- **Authorization**: Role-Based Access Control (RBAC)
+- **Logging**: Winston with structured logging
+- **Documentation**: Swagger/OpenAPI 3.0
+
+### 👥 User Roles & Permissions
+
+| Role | Permissions | Access Level |
+|------|-------------|--------------|
+| **Super Admin** | Full system access | Global |
+| **Admin** | Company management | Real Estate |
+| **Sales** | Sales operations | Building |
+| **Maintenance** | Maintenance requests | Building |
+| **Receptionist** | Visitor management | Building |
+| **Tenant** | Personal account | Unit |
+
+### 🏢 Multi-Tenant Structure
+
+```
+Super Admin
+├── Real Estate Company A
+│   ├── Admin A
+│   ├── Building A1
+│   │   ├── Sales A1
+│   │   ├── Maintenance A1
+│   │   ├── Receptionist A1
+│   │   └── Tenants A1
+│   └── Building A2
+│       └── ...
+└── Real Estate Company B
+    └── ...
+```
+
+## 🛠️ Development
+
+### Prerequisites
 
 - Node.js 18+ 
 - npm 9+
-- MongoDB (local or Atlas)
-- Redis (optional for development)
+- MongoDB Atlas account
+- Git
 
-## 🚀 Quick Start
+### Environment Setup
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/your-org/realestatepro-crm.git
-cd realestatepro-crm
-```
+1. **Copy environment template**
+   ```bash
+   cp env.local.example .env.local
+   ```
 
-### 2. Install dependencies
-```bash
-npm install
-```
+2. **Configure MongoDB Atlas**
+   - Create cluster at [MongoDB Atlas](https://cloud.mongodb.com)
+   - Get connection string
+   - Update `MONGODB_URI` in `.env.local`
 
-### 3. Set up environment variables
-```bash
-# Copy environment template
-cp env.development.example .env.local
-
-# Edit .env.local with your configuration
-nano .env.local
-```
-
-### 4. Set up database
-```bash
-# Start MongoDB (if using local)
-mongod
-
-# Run database migrations
-npm run db:migrate
-
-# Seed initial data
-npm run db:seed
-```
-
-### 5. Start development server
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) to view the application.
-
-## 🏗 Project Structure
-
-```
-realestatepro-crm/
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes
-│   ├── (auth)/            # Authentication pages
-│   ├── dashboard/         # Dashboard pages
-│   ├── buildings/         # Building management
-│   ├── tenants/           # Tenant management
-│   ├── maintenance/       # Maintenance requests
-│   ├── leads/             # Lead management
-│   └── globals.css        # Global styles
-├── components/            # Reusable components
-│   ├── ui/               # shadcn/ui components
-│   ├── forms/            # Form components
-│   ├── layout/           # Layout components
-│   └── charts/           # Chart components
-├── lib/                  # Utility libraries
-│   ├── auth.ts          # Authentication utilities
-│   ├── db.ts            # Database connection
-│   ├── utils.ts         # General utilities
-│   └── validations.ts   # Zod schemas
-├── models/               # Mongoose models
-├── hooks/                # Custom React hooks
-├── types/                # TypeScript type definitions
-├── locales/              # i18n translations
-├── docs/                 # Documentation
-└── scripts/              # Database scripts
-```
-
-## 🔧 Development
+3. **Set JWT Secret**
+   ```bash
+   # Generate a secure random string
+   openssl rand -base64 32
+   # Add to .env.local as JWT_SECRET
+   ```
 
 ### Available Scripts
 
@@ -139,13 +140,109 @@ npm run test:watch       # Run tests in watch mode
 npm run test:coverage    # Run tests with coverage
 
 # Database
-npm run db:migrate       # Run database migrations
 npm run db:seed          # Seed database with initial data
+npm run db:test          # Test database connection
+npm run db:verify-atlas  # Verify Atlas connection
 
 # Docker
 npm run docker:dev       # Start development containers
 npm run docker:prod      # Start production containers
 ```
+
+### API Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| `GET` | `/api/health` | System health check | No |
+| `GET` | `/api/docs` | API documentation | No |
+| `POST` | `/api/auth/login` | User authentication | No |
+| `GET` | `/api/users` | List users | Admin+ |
+| `POST` | `/api/users` | Create user | Admin+ |
+
+### Testing
+
+#### Manual Testing
+1. **Start the server**: `npm run dev`
+2. **Seed the database**: `npm run db:seed`
+3. **Access API docs**: `http://localhost:3000/api/docs`
+4. **Test login**: Use credentials from seeding output
+
+#### Automated Testing
+```bash
+# Run UAT guide tests
+# See docs/sprint1-uat-guide.md for comprehensive test cases
+
+# Test specific endpoints
+curl http://localhost:3000/api/health
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"superadmin@realestatepro.com","password":"SuperAdmin123!"}'
+```
+
+## 📚 Documentation
+
+- **[Sprint 1 UAT Guide](docs/sprint1-uat-guide.md)** - Comprehensive testing procedures
+- **[MongoDB Atlas Setup](docs/mongodb-atlas-setup.md)** - Database configuration guide
+- **[API Documentation](http://localhost:3000/api/docs)** - Interactive Swagger UI
+- **[Project Overview](docs/overview.md)** - Detailed project documentation
+
+## 🔐 Security Features
+
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: bcrypt with salt rounds
+- **RBAC**: Role-based access control with hierarchy
+- **Multi-tenant Isolation**: Data separation between companies
+- **Input Validation**: Comprehensive request validation
+- **Rate Limiting**: Protection against brute force attacks
+- **CORS Configuration**: Secure cross-origin requests
+
+## 📊 Monitoring & Logging
+
+- **Structured Logging**: JSON format with timestamps
+- **User Actions**: All user operations logged
+- **System Events**: Startup, shutdown, errors
+- **Performance Metrics**: Response times, database queries
+- **Error Tracking**: Stack traces and error codes
+
+## 🚀 Deployment
+
+### Environment Configuration
+
+1. **Development**: Copy `env.local.example` to `.env.local`
+2. **UAT**: Copy `env.uat.example` to `.env.uat`
+3. **Production**: Copy `env.production.example` to `.env.production`
+
+### Docker Deployment
+
+```bash
+# Development
+npm run docker:dev
+
+# Production
+npm run docker:prod
+```
+
+### Environment Variables
+
+Key environment variables:
+
+```bash
+# Application
+NODE_ENV=development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Database
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database
+
+# Authentication
+JWT_SECRET=your-super-secret-jwt-key-here
+JWT_EXPIRES_IN=7d
+
+# Logging
+LOG_LEVEL=info
+```
+
+## 🤝 Contributing
 
 ### Branch Strategy
 
@@ -166,116 +263,41 @@ fix(api): resolve user creation validation error
 docs(readme): update installation instructions
 ```
 
-## 🚀 Deployment
+## 📈 Roadmap
 
-### Environment Setup
+### ✅ Sprint 1 (COMPLETED)
+- [x] Authentication & Authorization
+- [x] User Management
+- [x] RBAC Implementation
+- [x] Database Seeding
+- [x] API Documentation
+- [x] Logging System
 
-1. **Development**: Copy `env.development.example` to `.env.local`
-2. **UAT**: Copy `env.uat.example` to `.env.uat`
-3. **Production**: Copy `env.production.example` to `.env.production`
+### 🔄 Sprint 2 (PLANNED)
+- [ ] Real Estate Management
+- [ ] Building Management
+- [ ] Unit/Flat Management
+- [ ] Tenant Management
+- [ ] Dashboard UI
 
-### CI/CD Pipeline
+### 🔄 Sprint 3 (PLANNED)
+- [ ] Maintenance Requests
+- [ ] Payment Processing
+- [ ] Visitor Management
+- [ ] Reporting & Analytics
+- [ ] Mobile Responsiveness
 
-The project uses GitHub Actions for automated deployment:
+## 📞 Support
 
-- **CI**: Runs on every push to `develop` and `feature/*` branches
-- **UAT Deployment**: Automatic deployment to UAT environment
-- **Production Deployment**: Manual deployment with approval
+- **Documentation**: Check the `docs/` directory
+- **API Docs**: Visit `/api/docs` when server is running
+- **Issues**: Create GitHub issues for bugs or feature requests
+- **Email**: support@realestatepro.com
 
-### Environment Variables
-
-Key environment variables:
-
-```bash
-# Application
-NODE_ENV=development
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Database
-MONGODB_URI=mongodb://localhost:27017/realestatepro_dev
-
-# Authentication
-NEXTAUTH_SECRET=your-secret-key
-JWT_SECRET=your-jwt-secret
-
-# Email
-SMTP_HOST=smtp.gmail.com
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-
-# Payment
-STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_SECRET_KEY=sk_test_...
-```
-
-## 🔒 Security
-
-- **Authentication**: JWT/OAuth2 with refresh token rotation
-- **Authorization**: Role-based access control (RBAC)
-- **Data Protection**: Encryption at rest and in transit
-- **Input Validation**: Zod schemas for all inputs
-- **Rate Limiting**: API rate limiting middleware
-- **CORS**: Configured CORS policies
-- **Audit Trail**: Comprehensive action logging
-
-## 🌐 Localization
-
-The application supports English and Arabic with RTL support:
-
-- **Default**: English
-- **Supported**: English, Arabic
-- **Timezone**: Asia/Dubai
-- **Currency**: AED (UAE Dirham)
-- **Date Format**: DD/MM/YYYY
-
-## 📊 API Documentation
-
-API documentation is available at `/api-docs` when running the application.
-
-### Key Endpoints
-
-- `GET /api/health` - Health check
-- `POST /api/auth/login` - User authentication
-- `GET /api/buildings` - List buildings
-- `GET /api/tenants` - List tenants
-- `POST /api/maintenance` - Create maintenance request
-- `GET /api/leads` - List leads
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow TypeScript best practices
-- Write unit tests for new features
-- Update documentation for API changes
-- Follow the established code style
-- Ensure all tests pass before submitting PR
-
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+---
 
-For support and questions:
-
-- **Email**: support@realestatepro.com
-- **Documentation**: [docs.realestatepro.com](https://docs.realestatepro.com)
-- **Issues**: [GitHub Issues](https://github.com/your-org/realestatepro-crm/issues)
-
-## 🗺 Roadmap
-
-- [ ] Mobile application (React Native)
-- [ ] Advanced analytics and reporting
-- [ ] IoT integration for smart buildings
-- [ ] AI-powered maintenance predictions
-- [ ] Multi-language support expansion
-- [ ] Advanced payment gateway integrations
-- [ ] Real-time chat support
-- [ ] Advanced document management 
+**Built with ❤️ by the RealEstatePro Team** 

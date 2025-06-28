@@ -1,21 +1,299 @@
 /**
  * app/api/docs/route.ts
- * Swagger UI endpoint for API documentation
- * Serves interactive API documentation at /api/docs
+ * Swagger API documentation endpoint
+ * Provides comprehensive API documentation for all endpoints
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getApiDocs } from '@/lib/swagger';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+
+// Swagger configuration
+const options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'RealEstatePro CRM API',
+      version: '1.0.0',
+      description: 'Next-generation multi-tenant real estate management platform API',
+      contact: {
+        name: 'RealEstatePro Team',
+        email: 'support@realestatepro.com',
+      },
+      license: {
+        name: 'MIT',
+        url: 'https://opensource.org/licenses/MIT',
+      },
+    },
+    servers: [
+      {
+        url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+        description: 'Development server',
+      },
+      {
+        url: 'https://api.realestatepro.com',
+        description: 'Production server',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT token obtained from /api/auth/login',
+        },
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            _id: {
+              type: 'string',
+              description: 'User ID',
+              example: '507f1f77bcf86cd799439011'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email address',
+              example: 'admin@realestatepro.com'
+            },
+            fullName: {
+              type: 'string',
+              description: 'User full name',
+              example: 'John Doe'
+            },
+            role: {
+              type: 'string',
+              enum: ['super_admin', 'admin', 'sales', 'maintenance', 'tenant', 'receptionist'],
+              description: 'User role',
+              example: 'admin'
+            },
+            realEstateId: {
+              type: 'string',
+              description: 'Real estate company ID',
+              example: '507f1f77bcf86cd799439012'
+            },
+            buildingId: {
+              type: 'string',
+              description: 'Building ID',
+              example: '507f1f77bcf86cd799439013'
+            },
+            phone: {
+              type: 'string',
+              description: 'Phone number',
+              example: '+971501234567'
+            },
+            avatar: {
+              type: 'string',
+              description: 'Profile picture URL',
+              example: 'https://example.com/avatar.jpg'
+            },
+            isActive: {
+              type: 'boolean',
+              description: 'User active status',
+              example: true
+            },
+            modules: {
+              type: 'array',
+              items: {
+                type: 'string'
+              },
+              description: 'Accessible modules',
+              example: ['users', 'buildings', 'tenants']
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Creation timestamp'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Last update timestamp'
+            }
+          },
+          required: ['email', 'fullName', 'role']
+        },
+        LoginRequest: {
+          type: 'object',
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email',
+              example: 'admin@realestatepro.com'
+            },
+            password: {
+              type: 'string',
+              description: 'User password',
+              example: 'SecurePassword123!'
+            }
+          },
+          required: ['email', 'password']
+        },
+        LoginResponse: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              example: true
+            },
+            message: {
+              type: 'string',
+              example: 'Login successful'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                token: {
+                  type: 'string',
+                  description: 'JWT access token',
+                  example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                },
+                user: {
+                  $ref: '#/components/schemas/User'
+                }
+              }
+            }
+          }
+        },
+        ErrorResponse: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              example: false
+            },
+            error: {
+              type: 'string',
+              description: 'Error message',
+              example: 'Invalid credentials'
+            },
+            code: {
+              type: 'string',
+              description: 'Error code',
+              example: 'INVALID_CREDENTIALS'
+            },
+            timestamp: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Error timestamp'
+            }
+          }
+        },
+        PaginationInfo: {
+          type: 'object',
+          properties: {
+            page: {
+              type: 'integer',
+              description: 'Current page number',
+              example: 1
+            },
+            limit: {
+              type: 'integer',
+              description: 'Items per page',
+              example: 10
+            },
+            total: {
+              type: 'integer',
+              description: 'Total number of items',
+              example: 100
+            },
+            pages: {
+              type: 'integer',
+              description: 'Total number of pages',
+              example: 10
+            }
+          }
+        },
+        HealthResponse: {
+          type: 'object',
+          properties: {
+            success: {
+              type: 'boolean',
+              example: true
+            },
+            message: {
+              type: 'string',
+              example: 'System is healthy'
+            },
+            data: {
+              type: 'object',
+              properties: {
+                status: {
+                  type: 'string',
+                  example: 'healthy'
+                },
+                timestamp: {
+                  type: 'string',
+                  format: 'date-time'
+                },
+                uptime: {
+                  type: 'number',
+                  description: 'System uptime in seconds',
+                  example: 3600
+                },
+                database: {
+                  type: 'object',
+                  properties: {
+                    status: {
+                      type: 'string',
+                      example: 'connected'
+                    },
+                    responseTime: {
+                      type: 'number',
+                      description: 'Database response time in milliseconds',
+                      example: 15
+                    }
+                  }
+                },
+                version: {
+                  type: 'string',
+                  example: '1.0.0'
+                },
+                environment: {
+                  type: 'string',
+                  example: 'development'
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
+  },
+  apis: [
+    './app/api/**/*.ts',
+    './lib/**/*.ts'
+  ],
+};
 
 /**
  * GET /api/docs
- * Serves the Swagger UI interface for API documentation
+ * Serve Swagger UI documentation
+ * 
+ * @swagger
+ * /api/docs:
+ *   get:
+ *     summary: API Documentation
+ *     description: Interactive API documentation using Swagger UI
+ *     tags: [Documentation]
+ *     responses:
+ *       200:
+ *         description: Swagger UI HTML page
  */
 export async function GET(request: NextRequest) {
   try {
-    const spec = getApiDocs();
+    const specs = swaggerJsdoc(options);
     
-    // Create HTML page with Swagger UI
+    // Create HTML response with Swagger UI
     const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -37,30 +315,14 @@ export async function GET(request: NextRequest) {
             margin:0;
             background: #fafafa;
         }
-        .swagger-ui .topbar { display: none; }
-        .swagger-ui .info .title { 
-            color: #2563eb; 
-            font-size: 2.5em; 
-            font-weight: 600;
+        .swagger-ui .topbar {
+            background-color: #1a1a1a;
         }
-        .swagger-ui .info .description { 
-            font-size: 1.1em; 
-            line-height: 1.6; 
-            color: #374151;
+        .swagger-ui .topbar .download-url-wrapper .select-label {
+            color: #fff;
         }
-        .swagger-ui .scheme-container { 
-            background: #f8fafc; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin: 20px 0;
-        }
-        .swagger-ui .btn.execute { 
-            background-color: #2563eb; 
-            border-color: #2563eb; 
-        }
-        .swagger-ui .btn.execute:hover { 
-            background-color: #1d4ed8; 
-            border-color: #1d4ed8; 
+        .swagger-ui .info .title {
+            color: #1a1a1a;
         }
     </style>
 </head>
@@ -71,7 +333,7 @@ export async function GET(request: NextRequest) {
     <script>
         window.onload = function() {
             const ui = SwaggerUIBundle({
-                spec: ${JSON.stringify(spec)},
+                spec: ${JSON.stringify(specs)},
                 dom_id: '#swagger-ui',
                 deepLinking: true,
                 presets: [
@@ -82,15 +344,32 @@ export async function GET(request: NextRequest) {
                     SwaggerUIBundle.plugins.DownloadUrl
                 ],
                 layout: "StandaloneLayout",
+                validatorUrl: null,
+                docExpansion: 'list',
+                filter: true,
+                showExtensions: true,
+                showCommonExtensions: true,
                 tryItOutEnabled: true,
                 requestInterceptor: function(request) {
-                    // Add default headers for testing
-                    request.headers['Content-Type'] = 'application/json';
+                    // Add authorization header if token exists
+                    const token = localStorage.getItem('auth_token');
+                    if (token) {
+                        request.headers.Authorization = 'Bearer ' + token;
+                    }
                     return request;
                 },
                 responseInterceptor: function(response) {
-                    // Log responses for debugging
-                    console.log('API Response:', response);
+                    // Store token from login response
+                    if (response.url && response.url.includes('/api/auth/login') && response.status === 200) {
+                        try {
+                            const data = JSON.parse(response.body);
+                            if (data.data && data.data.token) {
+                                localStorage.setItem('auth_token', data.data.token);
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse login response:', e);
+                        }
+                    }
                     return response;
                 }
             });
@@ -108,15 +387,15 @@ export async function GET(request: NextRequest) {
         'Expires': '0'
       }
     });
-
+    
   } catch (error) {
-    console.error('Error generating Swagger docs:', error);
+    console.error('Error generating Swagger documentation:', error);
     
     return NextResponse.json(
       {
         success: false,
         error: 'Failed to generate API documentation',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        code: 'DOCS_GENERATION_ERROR'
       },
       { status: 500 }
     );

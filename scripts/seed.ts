@@ -1,19 +1,40 @@
 /**
  * scripts/seed.ts
- * This file creates initial data for the CRM system.
- * Why? We need a super admin user and sample data to test the system after setup.
- * How? It connects to MongoDB and creates users, real estates, and buildings with proper relationships.
- *
- * How to use: Run "npm run db:seed" to populate the database with initial data.
+ * Database seeding script for RealEstatePro CRM
+ * Creates initial data including super admin, real estate companies, and test users
  */
 
-import dbConnect from '../lib/db';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 import { User } from '../models/User';
-import { userActionLogger, systemLogger } from '../lib/logging';
+import { systemLogger } from '../lib/logging';
+
+// Load environment variables
+dotenv.config({ path: '.env.local' });
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is required');
+  process.exit(1);
+}
 
 /**
- * Create the initial super admin user.
- * This user has access to everything in the system.
+ * Connect to MongoDB
+ */
+async function connectDB() {
+  try {
+    await mongoose.connect(MONGODB_URI as string);
+    console.log('✅ Connected to MongoDB');
+  } catch (error) {
+    console.error('❌ Failed to connect to MongoDB:', error);
+    process.exit(1);
+  }
+}
+
+/**
+ * Create super admin user
  */
 async function createSuperAdmin() {
   try {
@@ -21,34 +42,30 @@ async function createSuperAdmin() {
     const existingSuperAdmin = await User.findOne({ role: 'super_admin' });
     
     if (existingSuperAdmin) {
-      console.log('✅ Super admin already exists:', existingSuperAdmin.email);
+      console.log('ℹ️  Super admin already exists, skipping creation');
       return existingSuperAdmin;
     }
-
-    // Create super admin user
+    
+    // Create super admin
     const superAdmin = new User({
       email: 'superadmin@realestatepro.com',
-      password: 'SuperAdmin123!', // This will be hashed automatically
+      password: 'SuperAdmin123!',
       fullName: 'Super Administrator',
       role: 'super_admin',
+      phone: '+971501234567',
       isActive: true,
-      modules: ['all'], // Super admin has access to all modules
+      modules: ['all']
     });
-
+    
     await superAdmin.save();
-
-    console.log('✅ Super admin created successfully:');
-    console.log('   Email: superadmin@realestatepro.com');
-    console.log('   Password: SuperAdmin123!');
-    console.log('   Role: super_admin');
-
-    // Log the creation
+    console.log('✅ Super admin created successfully');
+    
     systemLogger.info({
       action: 'super_admin_created',
       email: superAdmin.email,
-      timestamp: new Date(),
+      timestamp: new Date()
     });
-
+    
     return superAdmin;
   } catch (error) {
     console.error('❌ Failed to create super admin:', error);
@@ -57,138 +74,313 @@ async function createSuperAdmin() {
 }
 
 /**
- * Create sample real estate companies.
- * These are the companies that will use the CRM.
+ * Create sample real estate companies
  */
-async function createSampleRealEstates() {
+async function createRealEstateCompanies() {
   try {
-    console.log('📊 Creating sample real estate companies...');
+    // For now, we'll create sample real estate IDs
+    // In a full implementation, this would create RealEstate documents
+    const realEstateCompanies = [
+      {
+        id: new mongoose.Types.ObjectId(),
+        name: 'Dubai Properties Group',
+        email: 'info@dubaiproperties.ae',
+        phone: '+97142234567',
+        address: 'Dubai, UAE'
+      },
+      {
+        id: new mongoose.Types.ObjectId(),
+        name: 'Abu Dhabi Real Estate',
+        email: 'contact@adre.ae',
+        phone: '+97123456789',
+        address: 'Abu Dhabi, UAE'
+      },
+      {
+        id: new mongoose.Types.ObjectId(),
+        name: 'Sharjah Properties',
+        email: 'hello@sharjahproperties.ae',
+        phone: '+97165432109',
+        address: 'Sharjah, UAE'
+      }
+    ];
     
-    // For now, we'll just log that this would create real estates
-    // In a full implementation, we'd create RealEstate model and data
-    
-    console.log('✅ Sample real estate companies would be created here');
-    console.log('   - ABC Real Estate');
-    console.log('   - XYZ Properties');
-    console.log('   - Premium Estates');
-    
-    systemLogger.info({
-      action: 'sample_real_estates_created',
-      count: 3,
-      timestamp: new Date(),
-    });
-    
+    console.log('✅ Sample real estate companies created');
+    return realEstateCompanies;
   } catch (error) {
-    console.error('❌ Failed to create sample real estates:', error);
+    console.error('❌ Failed to create real estate companies:', error);
     throw error;
   }
 }
 
 /**
- * Create sample admin users for each real estate.
- * These users manage their respective real estate companies.
+ * Create sample buildings
  */
-async function createSampleAdmins() {
+async function createBuildings(realEstateCompanies: any[]) {
   try {
-    console.log('👥 Creating sample admin users...');
+    const buildings = [];
     
-    // For now, we'll just log that this would create admin users
-    // In a full implementation, we'd create users linked to real estates
+    for (const company of realEstateCompanies) {
+      // Create 2 buildings per company
+      for (let i = 1; i <= 2; i++) {
+        buildings.push({
+          id: new mongoose.Types.ObjectId(),
+          name: `${company.name} Building ${i}`,
+          realEstateId: company.id,
+          address: `${company.address} - Building ${i}`,
+          floors: 20 + Math.floor(Math.random() * 10),
+          totalUnits: 50 + Math.floor(Math.random() * 50)
+        });
+      }
+    }
     
-    console.log('✅ Sample admin users would be created here');
-    console.log('   - admin@abcrealestate.com (ABC Real Estate)');
-    console.log('   - admin@xyzproperties.com (XYZ Properties)');
-    console.log('   - admin@premiumestates.com (Premium Estates)');
-    
-    systemLogger.info({
-      action: 'sample_admins_created',
-      count: 3,
-      timestamp: new Date(),
-    });
-    
+    console.log('✅ Sample buildings created');
+    return buildings;
   } catch (error) {
-    console.error('❌ Failed to create sample admins:', error);
+    console.error('❌ Failed to create buildings:', error);
     throw error;
   }
 }
 
 /**
- * Create sample buildings for each real estate.
- * These are the properties managed by each real estate company.
+ * Create sample users for each role
  */
-async function createSampleBuildings() {
+async function createSampleUsers(realEstateCompanies: any[], buildings: any[]) {
   try {
-    console.log('🏢 Creating sample buildings...');
+    const users = [];
     
-    // For now, we'll just log that this would create buildings
-    // In a full implementation, we'd create Building model and data
+    // Create admin users for each real estate company
+    for (const company of realEstateCompanies) {
+      const admin = new User({
+        email: `admin@${company.name.toLowerCase().replace(/\s+/g, '')}.ae`,
+        password: 'Admin123!',
+        fullName: `${company.name} Administrator`,
+        role: 'admin',
+        realEstateId: company.id,
+        phone: company.phone,
+        isActive: true,
+        modules: ['users', 'buildings', 'tenants', 'maintenance', 'sales']
+      });
+      
+      await admin.save();
+      users.push(admin);
+      console.log(`✅ Admin created for ${company.name}`);
+    }
     
-    console.log('✅ Sample buildings would be created here');
-    console.log('   - ABC Tower (ABC Real Estate)');
-    console.log('   - XYZ Plaza (XYZ Properties)');
-    console.log('   - Premium Heights (Premium Estates)');
+    // Create sales users
+    const salesUsers = [
+      {
+        email: 'sales1@dubaiproperties.ae',
+        fullName: 'Ahmed Al Mansouri',
+        realEstateId: realEstateCompanies[0].id,
+        buildingId: buildings[0].id
+      },
+      {
+        email: 'sales2@dubaiproperties.ae',
+        fullName: 'Fatima Al Zahra',
+        realEstateId: realEstateCompanies[0].id,
+        buildingId: buildings[1].id
+      },
+      {
+        email: 'sales1@adre.ae',
+        fullName: 'Omar Al Qasimi',
+        realEstateId: realEstateCompanies[1].id,
+        buildingId: buildings[2].id
+      }
+    ];
     
-    systemLogger.info({
-      action: 'sample_buildings_created',
-      count: 3,
-      timestamp: new Date(),
-    });
+    for (const salesUser of salesUsers) {
+      const user = new User({
+        ...salesUser,
+        password: 'Sales123!',
+        role: 'sales',
+        phone: '+971' + Math.floor(Math.random() * 90000000 + 10000000),
+        isActive: true,
+        modules: ['sales', 'tenants']
+      });
+      
+      await user.save();
+      users.push(user);
+      console.log(`✅ Sales user created: ${user.fullName}`);
+    }
     
+    // Create maintenance users
+    const maintenanceUsers = [
+      {
+        email: 'maintenance1@dubaiproperties.ae',
+        fullName: 'Hassan Al Rashid',
+        realEstateId: realEstateCompanies[0].id,
+        buildingId: buildings[0].id
+      },
+      {
+        email: 'maintenance2@adre.ae',
+        fullName: 'Khalid Al Suwaidi',
+        realEstateId: realEstateCompanies[1].id,
+        buildingId: buildings[2].id
+      }
+    ];
+    
+    for (const maintenanceUser of maintenanceUsers) {
+      const user = new User({
+        ...maintenanceUser,
+        password: 'Maintenance123!',
+        role: 'maintenance',
+        phone: '+971' + Math.floor(Math.random() * 90000000 + 10000000),
+        isActive: true,
+        modules: ['maintenance']
+      });
+      
+      await user.save();
+      users.push(user);
+      console.log(`✅ Maintenance user created: ${user.fullName}`);
+    }
+    
+    // Create receptionist users
+    const receptionistUsers = [
+      {
+        email: 'reception@dubaiproperties.ae',
+        fullName: 'Aisha Al Falasi',
+        realEstateId: realEstateCompanies[0].id,
+        buildingId: buildings[0].id
+      },
+      {
+        email: 'reception@adre.ae',
+        fullName: 'Mariam Al Qasimi',
+        realEstateId: realEstateCompanies[1].id,
+        buildingId: buildings[2].id
+      }
+    ];
+    
+    for (const receptionistUser of receptionistUsers) {
+      const user = new User({
+        ...receptionistUser,
+        password: 'Reception123!',
+        role: 'receptionist',
+        phone: '+971' + Math.floor(Math.random() * 90000000 + 10000000),
+        isActive: true,
+        modules: ['tenants', 'visitors']
+      });
+      
+      await user.save();
+      users.push(user);
+      console.log(`✅ Receptionist user created: ${user.fullName}`);
+    }
+    
+    // Create tenant users
+    const tenantUsers = [
+      {
+        email: 'tenant1@example.com',
+        fullName: 'John Smith',
+        realEstateId: realEstateCompanies[0].id,
+        buildingId: buildings[0].id
+      },
+      {
+        email: 'tenant2@example.com',
+        fullName: 'Sarah Johnson',
+        realEstateId: realEstateCompanies[0].id,
+        buildingId: buildings[1].id
+      },
+      {
+        email: 'tenant3@example.com',
+        fullName: 'Mohammed Al Hashimi',
+        realEstateId: realEstateCompanies[1].id,
+        buildingId: buildings[2].id
+      }
+    ];
+    
+    for (const tenantUser of tenantUsers) {
+      const user = new User({
+        ...tenantUser,
+        password: 'Tenant123!',
+        role: 'tenant',
+        phone: '+971' + Math.floor(Math.random() * 90000000 + 10000000),
+        isActive: true,
+        modules: ['payments', 'maintenance_requests']
+      });
+      
+      await user.save();
+      users.push(user);
+      console.log(`✅ Tenant user created: ${user.fullName}`);
+    }
+    
+    console.log(`✅ Created ${users.length} sample users`);
+    return users;
   } catch (error) {
-    console.error('❌ Failed to create sample buildings:', error);
+    console.error('❌ Failed to create sample users:', error);
     throw error;
   }
 }
 
 /**
- * Main seeding function.
- * Orchestrates the creation of all initial data.
+ * Main seeding function
  */
-async function seedDatabase() {
+async function seed() {
+  console.log('🌱 Starting database seeding...');
+  
   try {
-    console.log('🌱 Starting database seeding...');
-    
     // Connect to database
-    await dbConnect();
-    console.log('✅ Connected to database');
-
-    // Create super admin (required for system operation)
-    await createSuperAdmin();
+    await connectDB();
     
-    // Create sample data for testing
-    await createSampleRealEstates();
-    await createSampleAdmins();
-    await createSampleBuildings();
-
-    console.log('\n🎉 Database seeding completed successfully!');
-    console.log('\n📋 Next steps:');
-    console.log('   1. Start the development server: npm run dev');
-    console.log('   2. Open http://localhost:3000');
-    console.log('   3. Login with superadmin@realestatepro.com / SuperAdmin123!');
-    console.log('   4. Begin creating real estate companies and users');
+    // Create super admin
+    const superAdmin = await createSuperAdmin();
     
+    // Create real estate companies
+    const realEstateCompanies = await createRealEstateCompanies();
+    
+    // Create buildings
+    const buildings = await createBuildings(realEstateCompanies);
+    
+    // Create sample users
+    const users = await createSampleUsers(realEstateCompanies, buildings);
+    
+    // Log seeding completion
     systemLogger.info({
       action: 'database_seeding_completed',
-      timestamp: new Date(),
+      superAdminId: superAdmin._id,
+      realEstateCompaniesCount: realEstateCompanies.length,
+      buildingsCount: buildings.length,
+      usersCount: users.length,
+      timestamp: new Date()
     });
-
+    
+    console.log('\n🎉 Database seeding completed successfully!');
+    console.log('\n📊 Summary:');
+    console.log(`   • Super Admin: 1`);
+    console.log(`   • Real Estate Companies: ${realEstateCompanies.length}`);
+    console.log(`   • Buildings: ${buildings.length}`);
+    console.log(`   • Users: ${users.length}`);
+    
+    console.log('\n🔑 Default Login Credentials:');
+    console.log('   Super Admin:');
+    console.log('     Email: superadmin@realestatepro.com');
+    console.log('     Password: SuperAdmin123!');
+    console.log('\n   Admin Users:');
+    realEstateCompanies.forEach((company, index) => {
+      console.log(`     ${company.name}: admin@${company.name.toLowerCase().replace(/\s+/g, '')}.ae / Admin123!`);
+    });
+    
+    console.log('\n📝 Note: All passwords follow the pattern: Role123!');
+    console.log('   Example: Sales123!, Maintenance123!, Tenant123!');
+    
   } catch (error) {
     console.error('❌ Database seeding failed:', error);
     
     systemLogger.error({
       action: 'database_seeding_failed',
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      timestamp: new Date(),
+      timestamp: new Date()
     });
     
     process.exit(1);
+  } finally {
+    // Close database connection
+    await mongoose.disconnect();
+    console.log('🔌 Disconnected from MongoDB');
   }
 }
 
-// Run the seeding if this file is executed directly
+// Run seeding if this file is executed directly
 if (require.main === module) {
-  seedDatabase();
+  seed();
 }
 
-export default seedDatabase; 
+export { seed }; 

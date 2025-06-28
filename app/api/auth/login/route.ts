@@ -1,184 +1,288 @@
 /**
  * app/api/auth/login/route.ts
- * This file handles user login authentication.
- * Why? Users need to log in to access the CRM. This endpoint validates credentials and provides a secure token.
- * How? It checks email/password against the database, generates a JWT token, and logs the login attempt.
- *
- * How to use: Send POST request with email and password to /api/auth/login
+ * Login endpoint for user authentication
+ * Handles JWT token generation and user validation
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import dbConnect from '@/lib/db';
 import { User } from '@/models/User';
-import { generateToken } from '@/lib/auth';
-import { userActionLogger, errorLogger } from '@/lib/logging';
-import { checkRateLimit } from '@/lib/middleware';
+import { userActionLogger } from '@/lib/logging';
 
-// Define the login request body structure
-interface LoginRequest {
-  email: string;
-  password: string;
-}
+// JWT configuration
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-// Define the login response structure
-interface LoginResponse {
-  success: boolean;
-  message: string;
-  token?: string;
-  user?: {
-    id: string;
-    email: string;
-    fullName: string;
-    role: string;
-    realEstateId?: string | undefined;
-    buildingId?: string | undefined;
-  };
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
 }
 
 /**
  * POST /api/auth/login
- * Authenticates a user with email and password.
- * Returns a JWT token for subsequent API calls.
+ * Authenticate user and return JWT token
+ * 
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: User login
+ *     description: Authenticate user with email and password, return JWT token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "admin@realestatepro.com"
+ *               password:
+ *                 type: string
+ *                 example: "securepassword123"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Login successful"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                       description: JWT access token
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         fullName:
+ *                           type: string
+ *                         role:
+ *                           type: string
+ *                         realEstateId:
+ *                           type: string
+ *                         buildingId:
+ *                           type: string
+ *                         isActive:
+ *                           type: boolean
+ *       400:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Authentication failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
-    // Connect to database
-    await dbConnect();
-
     // Parse request body
-    const body: LoginRequest = await request.json();
-    const { email, password } = body;
-
+    const { email, password } = await request.json();
+    
     // Validate input
     if (!email || !password) {
       return NextResponse.json(
-        { success: false, message: 'Email and password are required' },
+        {
+          success: false,
+          error: 'Email and password are required',
+          code: 'MISSING_CREDENTIALS'
+        },
         { status: 400 }
       );
     }
-
-    // Basic email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid email format' },
-        { status: 400 }
-      );
-    }
-
-    // Check rate limiting (5 attempts per minute per IP)
-    const clientIP = request.headers.get('x-forwarded-for') || 'unknown';
-    if (!checkRateLimit(clientIP, 5, 60000)) {
-      errorLogger.warn({
-        action: 'rate_limit_exceeded',
-        ip: clientIP,
-        email: email.toLowerCase(),
-        timestamp: new Date(),
-      });
-
-      return NextResponse.json(
-        { success: false, message: 'Too many login attempts. Please try again later.' },
-        { status: 429 }
-      );
-    }
-
+    
+    // Connect to database
+    await dbConnect();
+    
     // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() });
-
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    
     if (!user) {
-      // Log failed login attempt (user not found)
       userActionLogger.warn({
-        action: 'login_failed',
+        action: 'login_failed_user_not_found',
         email: email.toLowerCase(),
-        reason: 'user_not_found',
-        ip: clientIP,
-        timestamp: new Date(),
+        ip: request.ip || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        timestamp: new Date()
       });
-
+      
       return NextResponse.json(
-        { success: false, message: 'Invalid email or password' },
+        {
+          success: false,
+          error: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS'
+        },
         { status: 401 }
       );
     }
-
+    
     // Check if user is active
     if (!user.isActive) {
       userActionLogger.warn({
-        action: 'login_failed',
+        action: 'login_failed_inactive_user',
+        userId: user._id,
         email: user.email,
-        reason: 'account_inactive',
-        ip: clientIP,
-        timestamp: new Date(),
+        isActive: user.isActive,
+        ip: request.ip || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        timestamp: new Date()
       });
-
+      
       return NextResponse.json(
-        { success: false, message: 'Account is deactivated. Please contact support.' },
+        {
+          success: false,
+          error: 'Account is not active. Please contact your administrator.',
+          code: 'ACCOUNT_INACTIVE'
+        },
         { status: 401 }
       );
     }
-
+    
     // Verify password
-    const isPasswordValid = await user.comparePassword(password);
-
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    
     if (!isPasswordValid) {
-      // Log failed login attempt (wrong password)
       userActionLogger.warn({
-        action: 'login_failed',
+        action: 'login_failed_invalid_password',
+        userId: user._id,
         email: user.email,
-        reason: 'invalid_password',
-        ip: clientIP,
-        timestamp: new Date(),
+        ip: request.ip || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        timestamp: new Date()
       });
-
+      
       return NextResponse.json(
-        { success: false, message: 'Invalid email or password' },
+        {
+          success: false,
+          error: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS'
+        },
         { status: 401 }
       );
     }
-
+    
     // Generate JWT token
-    const token = generateToken(user);
-
+    const tokenPayload = {
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      realEstateId: user.realEstateId,
+      buildingId: user.buildingId
+    };
+    
+    const token = jwt.sign(tokenPayload, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN
+    } as jwt.SignOptions);
+    
     // Log successful login
     userActionLogger.info({
       action: 'login_successful',
-      user: user.email,
+      userId: user._id,
+      email: user.email,
       role: user.role,
-      realEstateId: user.realEstateId?.toString(),
-      buildingId: user.buildingId?.toString(),
-      ip: clientIP,
-      timestamp: new Date(),
+      realEstateId: user.realEstateId,
+      buildingId: user.buildingId,
+      ip: request.ip || 'unknown',
+      userAgent: request.headers.get('user-agent') || 'unknown',
+      responseTime: Date.now() - startTime,
+      timestamp: new Date()
     });
-
-    // Return success response with token and user info
-    const response: LoginResponse = {
-      success: true,
-      message: 'Login successful',
-      token,
-      user: {
-        id: (user as any)._id.toString(),
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        realEstateId: user.realEstateId?.toString() || undefined,
-        buildingId: user.buildingId?.toString() || undefined,
+    
+    // Return success response
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Login successful',
+        data: {
+          token,
+          user: {
+            id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            role: user.role,
+            realEstateId: user.realEstateId,
+            buildingId: user.buildingId,
+            isActive: user.isActive,
+            modules: user.modules
+          }
+        }
       },
-    };
-
-    return NextResponse.json(response, { status: 200 });
-
+      { 
+        status: 200,
+        headers: {
+          'X-Response-Time': `${Date.now() - startTime}ms`
+        }
+      }
+    );
+    
   } catch (error) {
-    // Log unexpected errors
-    errorLogger.error({
+    const responseTime = Date.now() - startTime;
+    
+    userActionLogger.error({
       action: 'login_error',
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      timestamp: new Date(),
+      responseTime,
+      timestamp: new Date()
     });
-
+    
     return NextResponse.json(
-      { success: false, message: 'Internal server error. Please try again later.' },
-      { status: 500 }
+      {
+        success: false,
+        error: 'Internal server error',
+        code: 'LOGIN_ERROR'
+      },
+      { 
+        status: 500,
+        headers: {
+          'X-Response-Time': `${responseTime}ms`
+        }
+      }
     );
   }
+}
+
+/**
+ * OPTIONS /api/auth/login
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
+  });
 } 

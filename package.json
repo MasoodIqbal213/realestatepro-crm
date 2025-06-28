@@ -29,7 +29,8 @@
     "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
     "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
     "github:setup": "tsx scripts/setup-github.ts",
-    "github:auto-setup": "tsx scripts/auto-github-setup.ts"
+    "github:auto-setup": "tsx scripts/auto-github-setup.ts",
+    "github:fix": "tsx scripts/fix-github-setup.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.2",

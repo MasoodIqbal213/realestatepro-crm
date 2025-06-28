@@ -2,7 +2,6 @@
 const nextConfig = {
   // Enable experimental features
   experimental: {
-    appDir: true,
     serverComponentsExternalPackages: ['mongoose'],
   },
   
@@ -21,12 +20,7 @@ const nextConfig = {
   i18n: {
     locales: ['en', 'ar'],
     defaultLocale: 'en',
-    localeDetection: true,
-  },
-  
-  // Environment variables
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
+    localeDetection: false,
   },
   
   // Headers for security

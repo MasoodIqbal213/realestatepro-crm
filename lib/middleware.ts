@@ -8,14 +8,368 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserFromRequest, UserContext, hasRole, hasAnyRole, isSuperAdmin } from './auth';
 import { userActionLogger, errorLogger } from './logging';
+import jwt from 'jsonwebtoken';
 
 // Define the middleware response type
 interface MiddlewareResponse {
   success: boolean;
   message: string;
-  user?: UserContext;
+  user?: any;
+}
+
+// JWT configuration
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+
+// Define user roles and their hierarchy
+export const ROLES = {
+  SUPER_ADMIN: 'super_admin',
+  ADMIN: 'admin',
+  SALES: 'sales',
+  MAINTENANCE: 'maintenance',
+  TENANT: 'tenant',
+  RECEPTIONIST: 'receptionist'
+} as const;
+
+export type UserRole = typeof ROLES[keyof typeof ROLES];
+
+// Role hierarchy (higher index = more permissions)
+const ROLE_HIERARCHY: Record<UserRole, number> = {
+  [ROLES.SUPER_ADMIN]: 6,
+  [ROLES.ADMIN]: 5,
+  [ROLES.SALES]: 4,
+  [ROLES.MAINTENANCE]: 3,
+  [ROLES.RECEPTIONIST]: 2,
+  [ROLES.TENANT]: 1
+};
+
+// JWT payload interface
+interface JWTPayload {
+  userId: string;
+  email: string;
+  role: UserRole;
+  realEstateId?: string;
+  buildingId?: string;
+  iat: number;
+  exp: number;
+}
+
+/**
+ * Verify JWT token and extract user information
+ */
+export function verifyToken(token: string): JWTPayload | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET as string) as JWTPayload;
+    return decoded;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Extract token from Authorization header
+ */
+export function extractToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.substring(7);
+}
+
+/**
+ * Check if user has required role or higher
+ */
+export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
+  return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
+}
+
+/**
+ * Check if user has access to specific real estate
+ */
+export function hasRealEstateAccess(
+  userRealEstateId: string | undefined,
+  targetRealEstateId: string | undefined,
+  userRole: UserRole
+): boolean {
+  // Super admin can access all real estates
+  if (userRole === ROLES.SUPER_ADMIN) {
+    return true;
+  }
+  
+  // If no target real estate specified, allow access
+  if (!targetRealEstateId) {
+    return true;
+  }
+  
+  // User must belong to the same real estate
+  return userRealEstateId === targetRealEstateId;
+}
+
+/**
+ * Check if user has access to specific building
+ */
+export function hasBuildingAccess(
+  userBuildingId: string | undefined,
+  targetBuildingId: string | undefined,
+  userRole: UserRole
+): boolean {
+  // Super admin and admin can access all buildings in their real estate
+  if (userRole === ROLES.SUPER_ADMIN || userRole === ROLES.ADMIN) {
+    return true;
+  }
+  
+  // If no target building specified, allow access
+  if (!targetBuildingId) {
+    return true;
+  }
+  
+  // User must be assigned to the same building
+  return userBuildingId === targetBuildingId;
+}
+
+/**
+ * Authentication middleware
+ * Verifies JWT token and adds user info to request
+ */
+export function withAuth(handler: Function) {
+  return async (request: NextRequest) => {
+    try {
+      const token = extractToken(request);
+      
+      if (!token) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Authentication token required',
+            code: 'MISSING_TOKEN'
+          },
+          { status: 401 }
+        );
+      }
+      
+      const payload = verifyToken(token);
+      
+      if (!payload) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid or expired token',
+            code: 'INVALID_TOKEN'
+          },
+          { status: 401 }
+        );
+      }
+      
+      // Add user info to request headers for downstream handlers
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set('x-user-id', payload.userId);
+      requestHeaders.set('x-user-email', payload.email);
+      requestHeaders.set('x-user-role', payload.role);
+      if (payload.realEstateId) {
+        requestHeaders.set('x-real-estate-id', payload.realEstateId);
+      }
+      if (payload.buildingId) {
+        requestHeaders.set('x-building-id', payload.buildingId);
+      }
+      
+      // Create new request with user headers
+      const authenticatedRequest = new NextRequest(request, {
+        headers: requestHeaders
+      });
+      
+      return handler(authenticatedRequest);
+      
+    } catch (error) {
+      userActionLogger.error({
+        action: 'auth_middleware_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date()
+      });
+      
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authentication failed',
+          code: 'AUTH_ERROR'
+        },
+        { status: 500 }
+      );
+    }
+  };
+}
+
+/**
+ * Role-based authorization middleware
+ * Ensures user has required role or higher
+ */
+export function withRole(requiredRole: UserRole, handler: Function) {
+  return withAuth(async (request: NextRequest) => {
+    try {
+      const userRole = request.headers.get('x-user-role') as UserRole;
+      
+      if (!hasRole(userRole, requiredRole)) {
+        userActionLogger.warn({
+          action: 'insufficient_permissions',
+          userId: request.headers.get('x-user-id'),
+          userRole,
+          requiredRole,
+          endpoint: request.url,
+          timestamp: new Date()
+        });
+        
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Insufficient permissions',
+            code: 'INSUFFICIENT_PERMISSIONS'
+          },
+          { status: 403 }
+        );
+      }
+      
+      return handler(request);
+      
+    } catch (error) {
+      userActionLogger.error({
+        action: 'role_middleware_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date()
+      });
+      
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authorization failed',
+          code: 'AUTHZ_ERROR'
+        },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * Real estate access middleware
+ * Ensures user has access to the specified real estate
+ */
+export function withRealEstateAccess(handler: Function) {
+  return withAuth(async (request: NextRequest) => {
+    try {
+      const userRole = request.headers.get('x-user-role') as UserRole;
+      const userRealEstateId = request.headers.get('x-real-estate-id');
+      const targetRealEstateId = request.nextUrl.searchParams.get('realEstateId');
+      
+      if (!hasRealEstateAccess(userRealEstateId || undefined, targetRealEstateId || undefined, userRole)) {
+        userActionLogger.warn({
+          action: 'real_estate_access_denied',
+          userId: request.headers.get('x-user-id'),
+          userRealEstateId,
+          targetRealEstateId,
+          userRole,
+          endpoint: request.url,
+          timestamp: new Date()
+        });
+        
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Access denied to this real estate',
+            code: 'REAL_ESTATE_ACCESS_DENIED'
+          },
+          { status: 403 }
+        );
+      }
+      
+      return handler(request);
+      
+    } catch (error) {
+      userActionLogger.error({
+        action: 'real_estate_access_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date()
+      });
+      
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Real estate access check failed',
+          code: 'REAL_ESTATE_ACCESS_ERROR'
+        },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * Building access middleware
+ * Ensures user has access to the specified building
+ */
+export function withBuildingAccess(handler: Function) {
+  return withAuth(async (request: NextRequest) => {
+    try {
+      const userRole = request.headers.get('x-user-role') as UserRole;
+      const userBuildingId = request.headers.get('x-building-id');
+      const targetBuildingId = request.nextUrl.searchParams.get('buildingId');
+      
+      if (!hasBuildingAccess(userBuildingId || undefined, targetBuildingId || undefined, userRole)) {
+        userActionLogger.warn({
+          action: 'building_access_denied',
+          userId: request.headers.get('x-user-id'),
+          userBuildingId,
+          targetBuildingId,
+          userRole,
+          endpoint: request.url,
+          timestamp: new Date()
+        });
+        
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Access denied to this building',
+            code: 'BUILDING_ACCESS_DENIED'
+          },
+          { status: 403 }
+        );
+      }
+      
+      return handler(request);
+      
+    } catch (error) {
+      userActionLogger.error({
+        action: 'building_access_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date()
+      });
+      
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Building access check failed',
+          code: 'BUILDING_ACCESS_ERROR'
+        },
+        { status: 500 }
+      );
+    }
+  });
+}
+
+/**
+ * Get user info from request headers
+ */
+export function getUserFromRequest(request: NextRequest) {
+  return {
+    id: request.headers.get('x-user-id')!,
+    email: request.headers.get('x-user-email')!,
+    role: request.headers.get('x-user-role') as UserRole,
+    realEstateId: request.headers.get('x-real-estate-id') || undefined,
+    buildingId: request.headers.get('x-building-id') || undefined
+  };
 }
 
 /**
@@ -75,7 +429,7 @@ export function requireRole(request: NextRequest, requiredRole: string): Middlew
 
   const user = authResult.user!;
 
-  if (!hasRole(user, requiredRole)) {
+  if (!hasRole(user.role, requiredRole as UserRole)) {
     // Log unauthorized access attempt
     userActionLogger.warn({
       user: user.email,
@@ -113,7 +467,7 @@ export function requireAnyRole(request: NextRequest, requiredRoles: string[]): M
 
   const user = authResult.user!;
 
-  if (!hasAnyRole(user, requiredRoles)) {
+  if (!requiredRoles.every(role => hasRole(user.role, role as UserRole))) {
     // Log unauthorized access attempt
     userActionLogger.warn({
       user: user.email,
@@ -151,7 +505,7 @@ export function requireSuperAdmin(request: NextRequest): MiddlewareResponse {
 
   const user = authResult.user!;
 
-  if (!isSuperAdmin(user)) {
+  if (!hasRole(user.role, ROLES.SUPER_ADMIN)) {
     // Log unauthorized access attempt
     userActionLogger.warn({
       user: user.email,
@@ -194,12 +548,12 @@ export function createErrorResponse(message: string, status: number = 401): Next
  * Helper function to create a success response with user context.
  * Used to return proper HTTP responses from API routes.
  */
-export function createSuccessResponse(data: any, user?: UserContext): NextResponse {
+export function createSuccessResponse(data: any, user?: any): NextResponse {
   return NextResponse.json({
     success: true,
     data,
     user: user ? {
-      userId: user.userId,
+      userId: user.id,
       email: user.email,
       role: user.role,
     } : undefined,
